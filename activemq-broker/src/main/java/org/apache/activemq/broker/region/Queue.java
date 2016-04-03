@@ -829,39 +829,49 @@ public class Queue extends BaseDestination implements Task, UsageListener, Index
         producerExchange.incrementSend();
         do {
             checkUsage(context, producerExchange, message);
-            sendLock.lockInterruptibly();
-            try {
-                message.getMessageId().setBrokerSequenceId(getDestinationSequenceId());
-                if (store != null && message.isPersistent()) {
-                    message.getMessageId().setFutureOrSequenceLong(null);
-                    try {
-                        if (messages.isCacheEnabled()) {
-                            result = store.asyncAddQueueMessage(context, message, isOptimizeStorage());
-                            result.addListener(new PendingMarshalUsageTracker(message));
-                        } else {
-                            store.addMessage(context, message);
-                        }
+            message.getMessageId().setBrokerSequenceId(getDestinationSequenceId());
+            if (store != null && message.isPersistent()) {
+                message.getMessageId().setFutureOrSequenceLong(null);
+                try {
+                    //AMQ-6133 - don't store async if using persistJMSRedelivered
+                    //This flag causes a sync update later on dispatch which can cause a race
+                    //condition if the original add is processed after the update, which can cause
+                    //a duplicate message to be stored
+                    if (messages.isCacheEnabled() && !isPersistJMSRedelivered()) {
+                        result = store.asyncAddQueueMessage(context, message, isOptimizeStorage());
+                        final PendingMarshalUsageTracker tracker = new PendingMarshalUsageTracker(message);
+                        result.addListener(new Runnable() {
+                            @Override
+                            public void run() {
+                                //Execute usage tracker and then check isReduceMemoryFootprint()
+                                tracker.run();
+                                if (isReduceMemoryFootprint()) {
+                                    try {
+                                        message.clearMarshalledState();
+                                    } catch (JMSException e) {
+                                        throw new IllegalStateException(e);
+                                    }
+                                }
+                            }
+                        });
+                    } else {
+                        store.addMessage(context, message);
                         if (isReduceMemoryFootprint()) {
                             message.clearMarshalledState();
                         }
-                    } catch (Exception e) {
-                        // we may have a store in inconsistent state, so reset the cursor
-                        // before restarting normal broker operations
-                        resetNeeded = true;
-                        throw e;
                     }
+                } catch (Exception e) {
+                    // we may have a store in inconsistent state, so reset the cursor
+                    // before restarting normal broker operations
+                    resetNeeded = true;
+                    throw e;
                 }
-                if(tryOrderedCursorAdd(message, context)) {
-                    break;
-                }
-            } finally {
-                sendLock.unlock();
+            }
+            if(tryOrderedCursorAdd(message, context)) {
+                break;
             }
         } while (started.get());
 
-        if (store == null || (!context.isInTransaction() && !message.isPersistent())) {
-            messageSent(context, message);
-        }
         if (result != null && message.isResponseRequired() && !result.isCancelled()) {
             try {
                 result.get();
@@ -882,6 +892,7 @@ public class Queue extends BaseDestination implements Task, UsageListener, Index
         } else {
             // no ordering issue with non persistent messages
             result = tryCursorAdd(message);
+            messageSent(context, message);
         }
 
         return result;
@@ -2001,6 +2012,16 @@ public class Queue extends BaseDestination implements Task, UsageListener, Index
 
         pagedInPendingDispatchLock.writeLock().lock();
         try {
+            if (isPrioritizedMessages() && !dispatchPendingList.isEmpty() && list != null && !list.isEmpty()) {
+                // merge all to select priority order
+                for (MessageReference qmr : list) {
+                    if (!dispatchPendingList.contains(qmr)) {
+                        dispatchPendingList.addMessageLast(qmr);
+                    }
+                }
+                list = null;
+            }
+
             doActualDispatch(dispatchPendingList);
             // and now see if we can dispatch the new stuff.. and append to the pending
             // list anything that does not actually get dispatched.
