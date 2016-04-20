@@ -14,49 +14,63 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.activemq.broker.region.cursors;
+package org.apache.activemq.store.kahadb;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 import org.apache.activemq.broker.BrokerService;
-import org.apache.activemq.store.kahadb.FilteredKahaDBPersistenceAdapter;
-import org.apache.activemq.store.kahadb.KahaDBPersistenceAdapter;
-import org.apache.activemq.store.kahadb.MultiKahaDBPersistenceAdapter;
+import org.apache.activemq.store.AbstractVmConcurrentDispatchTest;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameters;
 
-/**
- * This test checks that pending message metrics work properly with MultiKahaDB
- *
- * AMQ-5923
- *
- */
-public class MultiKahaDBPendingMessageCursorTest extends
-    KahaDBPendingMessageCursorTest {
+@RunWith(Parameterized.class)
+public class MultiKahaDbVmConcurrentDispatchTest extends AbstractVmConcurrentDispatchTest {
+
+    private final boolean concurrentDispatch;
+    private static boolean[] concurrentDispatchVals = booleanVals;
+
+      @Parameters(name="Type:{0}; ReduceMemoryFootPrint:{1}; ConcurrentDispatch:{2}")
+      public static Collection<Object[]> data() {
+          List<Object[]> values = new ArrayList<>();
+
+          for (MessageType mt : MessageType.values()) {
+              for (boolean rmfVal : reduceMemoryFootPrintVals) {
+                  for (boolean cdVal : concurrentDispatchVals) {
+                      values.add(new Object[] {mt, rmfVal, cdVal});
+                  }
+              }
+          }
+
+          return values;
+      }
 
     /**
-     * @param prioritizedMessages
+     * @param messageType
+     * @param reduceMemoryFootPrint
+     * @param concurrentDispatch
      */
-    public MultiKahaDBPendingMessageCursorTest(boolean prioritizedMessages) {
-        super(prioritizedMessages);
+    public MultiKahaDbVmConcurrentDispatchTest(MessageType messageType, boolean reduceMemoryFootPrint,
+            boolean concurrentDispatch) {
+        super(messageType, reduceMemoryFootPrint);
+        this.concurrentDispatch = concurrentDispatch;
     }
 
     @Override
-    protected void initPersistence(BrokerService brokerService)
-            throws IOException {
-        broker.setPersistent(true);
-
+    protected void configurePersistenceAdapter(BrokerService broker) throws IOException {
         //setup multi-kaha adapter
         MultiKahaDBPersistenceAdapter persistenceAdapter = new MultiKahaDBPersistenceAdapter();
         persistenceAdapter.setDirectory(dataFileDir.getRoot());
 
         KahaDBPersistenceAdapter kahaStore = new KahaDBPersistenceAdapter();
-        kahaStore.setJournalMaxFileLength(1024 * 512);
+        kahaStore.setConcurrentStoreAndDispatchQueues(concurrentDispatch);
 
-        //set up a store per destination
         FilteredKahaDBPersistenceAdapter filtered = new FilteredKahaDBPersistenceAdapter();
         filtered.setPersistenceAdapter(kahaStore);
-        filtered.setPerDestination(true);
+        filtered.setPerDestination(false);
         List<FilteredKahaDBPersistenceAdapter> stores = new ArrayList<>();
         stores.add(filtered);
 
