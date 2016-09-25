@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -132,11 +132,52 @@ public class AmqpMessage {
      * @throws Exception if an error occurs during the accept.
      */
     public void accept() throws Exception {
+        accept(true);
+    }
+
+    /**
+     * Accepts the message marking it as consumed on the remote peer.
+     *
+     * @param settle
+     *      true if the client should also settle the delivery when sending the accept.
+     *
+     * @throws Exception if an error occurs during the accept.
+     */
+    public void accept(boolean settle) throws Exception {
         if (receiver == null) {
             throw new IllegalStateException("Can't accept non-received message.");
         }
 
-        receiver.accept(delivery);
+        receiver.accept(delivery, settle);
+    }
+
+    /**
+     * Accepts the message marking it as consumed on the remote peer.  This method
+     * will automatically settle the accepted delivery.
+     *
+     * @param session
+     *      The session that is used to manage acceptance of the message.
+     *
+     * @throws Exception if an error occurs during the accept.
+     */
+    public void accept(AmqpSession txnSession) throws Exception {
+        accept(txnSession, true);
+    }
+
+    /**
+     * Accepts the message marking it as consumed on the remote peer.
+     *
+     * @param session
+     *      The session that is used to manage acceptance of the message.
+     *
+     * @throws Exception if an error occurs during the accept.
+     */
+    public void accept(AmqpSession txnSession, boolean settle) throws Exception {
+        if (receiver == null) {
+            throw new IllegalStateException("Can't accept non-received message.");
+        }
+
+        receiver.accept(delivery, txnSession, settle);
     }
 
     /**
@@ -173,6 +214,31 @@ public class AmqpMessage {
     //----- Convenience methods for constructing outbound messages -----------//
 
     /**
+     * Sets the address which is applied to the AMQP message To field in the message properties
+     *
+     * @param address
+     *      The address that should be applied in the Message To field.
+     */
+    public void setAddress(String address) {
+        checkReadOnly();
+        lazyCreateProperties();
+        getWrappedMessage().setAddress(address);
+    }
+
+    /**
+     * Return the set address that was set in the Message To field.
+     *
+     * @return the set address String form or null if not set.
+     */
+    public String getAddress() {
+        if (message.getProperties() == null) {
+            return null;
+        }
+
+        return message.getProperties().getTo();
+    }
+
+    /**
      * Sets the MessageId property on an outbound message using the provided String
      *
      * @param messageId
@@ -196,6 +262,84 @@ public class AmqpMessage {
         }
 
         return message.getProperties().getMessageId().toString();
+    }
+
+    /**
+     * Return the set MessageId value in the original form, if there are no properties
+     * in the given message return null.
+     *
+     * @return the set message ID in its original form or null if not set.
+     */
+    public Object getRawMessageId() {
+        if (message.getProperties() == null) {
+            return null;
+        }
+
+        return message.getProperties().getMessageId();
+    }
+
+    /**
+     * Sets the MessageId property on an outbound message using the provided value
+     *
+     * @param messageId
+     *        the message ID value to set.
+     */
+    public void setRawMessageId(Object messageId) {
+        checkReadOnly();
+        lazyCreateProperties();
+        getWrappedMessage().setMessageId(messageId);
+    }
+
+    /**
+     * Sets the CorrelationId property on an outbound message using the provided String
+     *
+     * @param correlationId
+     *        the String Correlation ID value to set.
+     */
+    public void setCorrelationId(String correlationId) {
+        checkReadOnly();
+        lazyCreateProperties();
+        getWrappedMessage().setCorrelationId(correlationId);
+    }
+
+    /**
+     * Return the set CorrelationId value in String form, if there are no properties
+     * in the given message return null.
+     *
+     * @return the set correlation ID in String form or null if not set.
+     */
+    public String getCorrelationId() {
+        if (message.getProperties() == null) {
+            return null;
+        }
+
+        return message.getProperties().getCorrelationId().toString();
+    }
+
+    /**
+     * Return the set CorrelationId value in the original form, if there are no properties
+     * in the given message return null.
+     *
+     * @return the set message ID in its original form or null if not set.
+     */
+    public Object getRawCorrelationId() {
+        if (message.getProperties() == null) {
+            return null;
+        }
+
+        return message.getProperties().getCorrelationId();
+    }
+
+    /**
+     * Sets the CorrelationId property on an outbound message using the provided value
+     *
+     * @param correlationId
+     *        the correlation ID value to set.
+     */
+    public void setRawCorrelationId(Object correlationId) {
+        checkReadOnly();
+        lazyCreateProperties();
+        getWrappedMessage().setCorrelationId(correlationId);
     }
 
     /**
@@ -271,7 +415,7 @@ public class AmqpMessage {
      * @param key
      *        the name used to lookup the property in the application properties.
      *
-     * @return the propety value or null if not set.
+     * @return the property value or null if not set.
      */
     public Object getApplicationProperty(String key) {
         if (applicationPropertiesMap == null) {
@@ -457,6 +601,7 @@ public class AmqpMessage {
             message.setHeader(new Header());
         }
     }
+
     private void lazyCreateProperties() {
         if (message.getProperties() == null) {
             message.setProperties(new Properties());

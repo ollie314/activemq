@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -31,6 +31,7 @@ import org.apache.activemq.command.ActiveMQQueue;
 import org.apache.activemq.command.ActiveMQTopic;
 import org.apache.activemq.command.ProducerId;
 import org.apache.activemq.store.MessageStore;
+import org.apache.activemq.store.NoLocalSubscriptionAware;
 import org.apache.activemq.store.PersistenceAdapter;
 import org.apache.activemq.store.ProxyMessageStore;
 import org.apache.activemq.store.TopicMessageStore;
@@ -41,9 +42,8 @@ import org.slf4j.LoggerFactory;
 
 /**
  * @org.apache.xbean.XBean
- *
  */
-public class MemoryPersistenceAdapter implements PersistenceAdapter {
+public class MemoryPersistenceAdapter implements PersistenceAdapter, NoLocalSubscriptionAware {
     private static final Logger LOG = LoggerFactory.getLogger(MemoryPersistenceAdapter.class);
 
     MemoryTransactionStore transactionStore;
@@ -96,7 +96,8 @@ public class MemoryPersistenceAdapter implements PersistenceAdapter {
     /**
      * Cleanup method to remove any state associated with the given destination
      *
-     * @param destination Destination to forget
+     * @param destination
+     *        Destination to forget
      */
     @Override
     public void removeQueueMessageStore(ActiveMQQueue destination) {
@@ -106,7 +107,8 @@ public class MemoryPersistenceAdapter implements PersistenceAdapter {
     /**
      * Cleanup method to remove any state associated with the given destination
      *
-     * @param destination Destination to forget
+     * @param destination
+     *        Destination to forget
      */
     @Override
     public void removeTopicMessageStore(ActiveMQTopic destination) {
@@ -176,10 +178,10 @@ public class MemoryPersistenceAdapter implements PersistenceAdapter {
 
     protected MemoryMessageStore asMemoryMessageStore(Object value) {
         if (value instanceof MemoryMessageStore) {
-            return (MemoryMessageStore)value;
+            return (MemoryMessageStore) value;
         }
         if (value instanceof ProxyMessageStore) {
-            MessageStore delegate = ((ProxyMessageStore)value).getDelegate();
+            MessageStore delegate = ((ProxyMessageStore) value).getDelegate();
             if (delegate instanceof MemoryMessageStore) {
                 return (MemoryMessageStore) delegate;
             }
@@ -189,8 +191,8 @@ public class MemoryPersistenceAdapter implements PersistenceAdapter {
     }
 
     /**
-     * @param usageManager The UsageManager that is controlling the broker's
-     *                memory usage.
+     * @param usageManager
+     *        The UsageManager that is controlling the broker's memory usage.
      */
     @Override
     public void setUsageManager(SystemUsage usageManager) {
@@ -210,7 +212,7 @@ public class MemoryPersistenceAdapter implements PersistenceAdapter {
     }
 
     @Override
-    public File getDirectory(){
+    public File getDirectory() {
         return null;
     }
 
@@ -219,7 +221,7 @@ public class MemoryPersistenceAdapter implements PersistenceAdapter {
     }
 
     @Override
-    public long size(){
+    public long size() {
         return 0;
     }
 
@@ -239,5 +241,13 @@ public class MemoryPersistenceAdapter implements PersistenceAdapter {
     public JobSchedulerStore createJobSchedulerStore() throws IOException, UnsupportedOperationException {
         // We could eventuall implement an in memory scheduler.
         throw new UnsupportedOperationException();
+    }
+
+    /* (non-Javadoc)
+     * @see org.apache.activemq.store.NoLocalSubscriptionAware#isPersistNoLocal()
+     */
+    @Override
+    public boolean isPersistNoLocal() {
+        return true;
     }
 }

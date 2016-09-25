@@ -42,6 +42,7 @@ import org.apache.activemq.command.XATransactionId;
 import org.apache.activemq.protobuf.Buffer;
 import org.apache.activemq.store.JournaledStore;
 import org.apache.activemq.store.MessageStore;
+import org.apache.activemq.store.NoLocalSubscriptionAware;
 import org.apache.activemq.store.PersistenceAdapter;
 import org.apache.activemq.store.SharedFileLocker;
 import org.apache.activemq.store.TopicMessageStore;
@@ -61,7 +62,9 @@ import org.apache.activemq.util.ServiceStopper;
  * @org.apache.xbean.XBean element="kahaDB"
  *
  */
-public class KahaDBPersistenceAdapter extends LockableServiceSupport implements PersistenceAdapter, JournaledStore, TransactionIdTransformerAware {
+public class KahaDBPersistenceAdapter extends LockableServiceSupport implements PersistenceAdapter,
+    JournaledStore, TransactionIdTransformerAware, NoLocalSubscriptionAware {
+
     private final KahaDBStore letter = new KahaDBStore();
 
     /**
@@ -433,7 +436,7 @@ public class KahaDBPersistenceAdapter extends LockableServiceSupport implements 
 
     /**
      * Get the enableJournalDiskSyncs
-     *
+     * @deprecated use {@link #getJournalDiskSyncStrategy} instead
      * @return the enableJournalDiskSyncs
      */
     public boolean isEnableJournalDiskSyncs() {
@@ -443,11 +446,40 @@ public class KahaDBPersistenceAdapter extends LockableServiceSupport implements 
     /**
      * Set the enableJournalDiskSyncs
      *
+     * @deprecated use {@link #setJournalDiskSyncStrategy} instead
      * @param enableJournalDiskSyncs
      *            the enableJournalDiskSyncs to set
      */
     public void setEnableJournalDiskSyncs(boolean enableJournalDiskSyncs) {
         this.letter.setEnableJournalDiskSyncs(enableJournalDiskSyncs);
+    }
+
+    /**
+     * @return
+     */
+    public String getJournalDiskSyncStrategy() {
+        return letter.getJournalDiskSyncStrategy();
+    }
+
+    /**
+     * @param journalDiskSyncStrategy
+     */
+    public void setJournalDiskSyncStrategy(String journalDiskSyncStrategy) {
+        letter.setJournalDiskSyncStrategy(journalDiskSyncStrategy);
+    }
+
+    /**
+     * @return
+     */
+    public long getJournalDiskSyncInterval() {
+        return letter.getJournalDiskSyncInterval();
+    }
+
+    /**
+     * @param journalDiskSyncInterval
+     */
+    public void setJournalDiskSyncInterval(long journalDiskSyncInterval) {
+        letter.setJournalDiskSyncInterval(journalDiskSyncInterval);
     }
 
     /**
@@ -687,6 +719,26 @@ public class KahaDBPersistenceAdapter extends LockableServiceSupport implements 
         letter.setEnableAckCompaction(enableAckCompaction);
     }
 
+    /**
+     * Whether non-blocking subscription statistics have been enabled
+     *
+     * @return
+     */
+    public boolean isEnableSubscriptionStatistics() {
+        return letter.isEnableSubscriptionStatistics();
+    }
+
+    /**
+     * Enable caching statistics for each subscription to allow non-blocking
+     * retrieval of metrics.  This could incur some overhead to compute if there are a lot
+     * of subscriptions.
+     *
+     * @param enableSubscriptionStatistics
+     */
+    public void setEnableSubscriptionStatistics(boolean enableSubscriptionStatistics) {
+        letter.setEnableSubscriptionStatistics(enableSubscriptionStatistics);
+    }
+
     public KahaDBStore getStore() {
         return letter;
     }
@@ -738,5 +790,13 @@ public class KahaDBPersistenceAdapter extends LockableServiceSupport implements 
     @Override
     public JobSchedulerStore createJobSchedulerStore() throws IOException, UnsupportedOperationException {
         return this.letter.createJobSchedulerStore();
+    }
+
+    /* (non-Javadoc)
+     * @see org.apache.activemq.store.NoLocalSubscriptionAware#isPersistNoLocal()
+     */
+    @Override
+    public boolean isPersistNoLocal() {
+        return this.letter.isPersistNoLocal();
     }
 }
