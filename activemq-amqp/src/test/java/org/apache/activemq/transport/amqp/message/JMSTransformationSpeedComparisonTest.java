@@ -17,9 +17,11 @@
 package org.apache.activemq.transport.amqp.message;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -51,7 +53,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Some simple performance tests for the Message Transformers.
  */
-@Ignore("Turn on to profile.")
+@Ignore("Enable for profiling")
 @RunWith(Parameterized.class)
 public class JMSTransformationSpeedComparisonTest {
 
@@ -62,7 +64,7 @@ public class JMSTransformationSpeedComparisonTest {
 
     private final String transformer;
 
-    private final int WARM_CYCLES = 50;
+    private final int WARM_CYCLES = 1000;
     private final int PROFILE_CYCLES = 1000000;
 
     public JMSTransformationSpeedComparisonTest(String transformer) {
@@ -81,11 +83,11 @@ public class JMSTransformationSpeedComparisonTest {
     private InboundTransformer getInboundTransformer() {
         switch (transformer) {
             case "raw":
-                return new AMQPRawInboundTransformer(ActiveMQJMSVendor.INSTANCE);
+                return new AMQPRawInboundTransformer();
             case "native":
-                return new AMQPNativeInboundTransformer(ActiveMQJMSVendor.INSTANCE);
+                return new AMQPNativeInboundTransformer();
             default:
-                return new JMSMappingInboundTransformer(ActiveMQJMSVendor.INSTANCE);
+                return new JMSMappingInboundTransformer();
         }
     }
 
@@ -93,9 +95,9 @@ public class JMSTransformationSpeedComparisonTest {
         switch (transformer) {
             case "raw":
             case "native":
-                return new AMQPNativeOutboundTransformer(ActiveMQJMSVendor.INSTANCE);
+                return new AMQPNativeOutboundTransformer();
             default:
-                return new JMSMappingOutboundTransformer(ActiveMQJMSVendor.INSTANCE);
+                return new JMSMappingOutboundTransformer();
         }
     }
 
@@ -112,7 +114,7 @@ public class JMSTransformationSpeedComparisonTest {
 
         // Warm up
         for (int i = 0; i < WARM_CYCLES; ++i) {
-            ActiveMQMessage intermediate = (ActiveMQMessage) inboundTransformer.transform(encoded);
+            ActiveMQMessage intermediate = inboundTransformer.transform(encoded);
             intermediate.onSend();
             outboundTransformer.transform(intermediate);
         }
@@ -121,7 +123,7 @@ public class JMSTransformationSpeedComparisonTest {
 
         long startTime = System.nanoTime();
         for (int i = 0; i < PROFILE_CYCLES; ++i) {
-            ActiveMQMessage intermediate = (ActiveMQMessage) inboundTransformer.transform(encoded);
+            ActiveMQMessage intermediate = inboundTransformer.transform(encoded);
             intermediate.onSend();
             outboundTransformer.transform(intermediate);
         }
@@ -148,7 +150,7 @@ public class JMSTransformationSpeedComparisonTest {
 
         // Warm up
         for (int i = 0; i < WARM_CYCLES; ++i) {
-            ActiveMQMessage intermediate = (ActiveMQMessage) inboundTransformer.transform(encoded);
+            ActiveMQMessage intermediate = inboundTransformer.transform(encoded);
             intermediate.onSend();
             outboundTransformer.transform(intermediate);
         }
@@ -157,7 +159,7 @@ public class JMSTransformationSpeedComparisonTest {
 
         long startTime = System.nanoTime();
         for (int i = 0; i < PROFILE_CYCLES; ++i) {
-            ActiveMQMessage intermediate = (ActiveMQMessage) inboundTransformer.transform(encoded);
+            ActiveMQMessage intermediate = inboundTransformer.transform(encoded);
             intermediate.onSend();
             outboundTransformer.transform(intermediate);
         }
@@ -176,7 +178,7 @@ public class JMSTransformationSpeedComparisonTest {
 
         // Warm up
         for (int i = 0; i < WARM_CYCLES; ++i) {
-            ActiveMQMessage intermediate = (ActiveMQMessage) inboundTransformer.transform(encoded);
+            ActiveMQMessage intermediate = inboundTransformer.transform(encoded);
             intermediate.onSend();
             outboundTransformer.transform(intermediate);
         }
@@ -185,7 +187,35 @@ public class JMSTransformationSpeedComparisonTest {
 
         long startTime = System.nanoTime();
         for (int i = 0; i < PROFILE_CYCLES; ++i) {
-            ActiveMQMessage intermediate = (ActiveMQMessage) inboundTransformer.transform(encoded);
+            ActiveMQMessage intermediate = inboundTransformer.transform(encoded);
+            intermediate.onSend();
+            outboundTransformer.transform(intermediate);
+        }
+        totalDuration += System.nanoTime() - startTime;
+
+        LOG.info("[{}] Total time for {} cycles of transforms = {} ms  -> [{}]",
+            transformer, PROFILE_CYCLES, TimeUnit.NANOSECONDS.toMillis(totalDuration), test.getMethodName());
+    }
+
+    @Test
+    public void testComplexQpidJMSMessage() throws Exception {
+
+        EncodedMessage encoded = encode(createComplexQpidJMSMessage());
+        InboundTransformer inboundTransformer = getInboundTransformer();
+        OutboundTransformer outboundTransformer = getOutboundTransformer();
+
+        // Warm up
+        for (int i = 0; i < WARM_CYCLES; ++i) {
+            ActiveMQMessage intermediate = inboundTransformer.transform(encoded);
+            intermediate.onSend();
+            outboundTransformer.transform(intermediate);
+        }
+
+        long totalDuration = 0;
+
+        long startTime = System.nanoTime();
+        for (int i = 0; i < PROFILE_CYCLES; ++i) {
+            ActiveMQMessage intermediate = inboundTransformer.transform(encoded);
             intermediate.onSend();
             outboundTransformer.transform(intermediate);
         }
@@ -226,7 +256,7 @@ public class JMSTransformationSpeedComparisonTest {
         InboundTransformer inboundTransformer = getInboundTransformer();
         OutboundTransformer outboundTransformer = getOutboundTransformer();
 
-        ActiveMQMessage outbound = (ActiveMQMessage) inboundTransformer.transform(encoded);
+        ActiveMQMessage outbound = inboundTransformer.transform(encoded);
         outbound.onSend();
 
         // Warm up
@@ -247,7 +277,6 @@ public class JMSTransformationSpeedComparisonTest {
             transformer, PROFILE_CYCLES, TimeUnit.NANOSECONDS.toMillis(totalDuration), test.getMethodName());
     }
 
-    @Ignore
     @Test
     public void testEncodeDecodeIsWorking() throws Exception {
         Message incomingMessage = createTypicalQpidJMSMessage();
@@ -255,7 +284,7 @@ public class JMSTransformationSpeedComparisonTest {
         InboundTransformer inboundTransformer = getInboundTransformer();
         OutboundTransformer outboundTransformer = getOutboundTransformer();
 
-        ActiveMQMessage outbound = (ActiveMQMessage) inboundTransformer.transform(encoded);
+        ActiveMQMessage outbound = inboundTransformer.transform(encoded);
         outbound.onSend();
         Message outboudMessage = outboundTransformer.transform(outbound).decode();
 
@@ -290,6 +319,25 @@ public class JMSTransformationSpeedComparisonTest {
         assertEquals(incomingBody.getValue(), outgoingBody.getValue());
     }
 
+    @Test
+    public void testBodyOnlyEncodeDecode() throws Exception {
+
+        Message incomingMessage = Proton.message();
+
+        incomingMessage.setBody(new AmqpValue("String payload for AMQP message conversion performance testing."));
+
+        EncodedMessage encoded = encode(incomingMessage);
+        InboundTransformer inboundTransformer = getInboundTransformer();
+        OutboundTransformer outboundTransformer = getOutboundTransformer();
+
+        ActiveMQMessage intermediate = inboundTransformer.transform(encoded);
+        intermediate.onSend();
+        Message outboudMessage = outboundTransformer.transform(intermediate).decode();
+
+        assertNull(outboudMessage.getHeader());
+        assertNull(outboudMessage.getProperties());
+    }
+
     private Message createTypicalQpidJMSMessage() {
         Map<String, Object> applicationProperties = new HashMap<String, Object>();
         Map<Symbol, Object> messageAnnotations = new HashMap<Symbol, Object>();
@@ -309,6 +357,50 @@ public class JMSTransformationSpeedComparisonTest {
         message.setMessageAnnotations(new MessageAnnotations(messageAnnotations));
         message.setCreationTime(System.currentTimeMillis());
         message.setContentType("text/plain");
+        message.setBody(new AmqpValue("String payload for AMQP message conversion performance testing."));
+
+        return message;
+    }
+
+    private Message createComplexQpidJMSMessage() {
+        Map<String, Object> applicationProperties = new HashMap<String, Object>();
+        Map<Symbol, Object> messageAnnotations = new HashMap<Symbol, Object>();
+
+        applicationProperties.put("property-1", "string-1");
+        applicationProperties.put("property-2", 512);
+        applicationProperties.put("property-3", true);
+        applicationProperties.put("property-4", "string-2");
+        applicationProperties.put("property-5", 512);
+        applicationProperties.put("property-6", true);
+        applicationProperties.put("property-7", "string-3");
+        applicationProperties.put("property-8", 512);
+        applicationProperties.put("property-9", true);
+
+        messageAnnotations.put(Symbol.valueOf("x-opt-jms-msg-type"), 0);
+        messageAnnotations.put(Symbol.valueOf("x-opt-jms-dest"), 0);
+
+        Message message = Proton.message();
+
+        // Header Values
+        message.setPriority((short) 9);
+        message.setDurable(true);
+        message.setDeliveryCount(2);
+        message.setTtl(5000);
+
+        // Properties
+        message.setMessageId("ID:SomeQualifier:0:0:1");
+        message.setGroupId("Group-ID-1");
+        message.setGroupSequence(15);
+        message.setAddress("queue://test-queue");
+        message.setReplyTo("queue://reply-queue");
+        message.setCreationTime(System.currentTimeMillis());
+        message.setContentType("text/plain");
+        message.setCorrelationId("ID:SomeQualifier:0:7:9");
+        message.setUserId("username".getBytes(StandardCharsets.UTF_8));
+
+        // Application Properties / Message Annotations / Body
+        message.setApplicationProperties(new ApplicationProperties(applicationProperties));
+        message.setMessageAnnotations(new MessageAnnotations(messageAnnotations));
         message.setBody(new AmqpValue("String payload for AMQP message conversion performance testing."));
 
         return message;
