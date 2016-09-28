@@ -99,6 +99,8 @@ public class JMSMappingOutboundTransformer implements OutboundTransformer {
     public static final Symbol JMS_DEST_TYPE_MSG_ANNOTATION = Symbol.valueOf("x-opt-jms-dest");
     public static final Symbol JMS_REPLY_TO_TYPE_MSG_ANNOTATION = Symbol.valueOf("x-opt-jms-reply-to");
 
+    private static final String AMQ_SCHEDULED_MESSAGE_PREFIX = "AMQ_SCHEDULED_";
+
     public static final byte QUEUE_TYPE = 0x00;
     public static final byte TOPIC_TYPE = 0x01;
     public static final byte TEMP_QUEUE_TYPE = 0x02;
@@ -218,7 +220,7 @@ public class JMSMappingOutboundTransformer implements OutboundTransformer {
             if (header == null) {
                 header = new Header();
             }
-            header.setDeliveryCount(new UnsignedInteger(deliveryCount));
+            header.setDeliveryCount(UnsignedInteger.valueOf(deliveryCount));
         }
         String userId = message.getUserID();
         if (userId != null) {
@@ -236,11 +238,10 @@ public class JMSMappingOutboundTransformer implements OutboundTransformer {
         }
         int groupSequence = message.getGroupSequence();
         if (groupSequence > 0) {
-            UnsignedInteger value = new UnsignedInteger(groupSequence);
             if (properties == null) {
                 properties = new Properties();
             }
-            properties.setGroupSequence(value);
+            properties.setGroupSequence(UnsignedInteger.valueOf(groupSequence));
         }
 
         final Map<String, Object> entries;
@@ -323,6 +324,9 @@ public class JMSMappingOutboundTransformer implements OutboundTransformer {
                     footerMap.put(name, value);
                     continue;
                 }
+            } else if (key.startsWith(AMQ_SCHEDULED_MESSAGE_PREFIX )) {
+                // strip off the scheduled message properties
+                continue;
             }
 
             // The property didn't map into any other slot so we store it in the
