@@ -16,7 +16,9 @@
  */
 package org.apache.activemq.transport.amqp.client;
 
+import java.io.IOException;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.activemq.transport.amqp.client.util.AsyncResult;
@@ -38,6 +40,7 @@ public class AmqpSession extends AmqpAbstractResource<Session> {
     private final AmqpConnection connection;
     private final String sessionId;
     private final AmqpTransactionContext txContext;
+    private final AtomicBoolean closed = new AtomicBoolean();
 
     /**
      * Create a new session instance.
@@ -51,6 +54,29 @@ public class AmqpSession extends AmqpAbstractResource<Session> {
         this.connection = connection;
         this.sessionId = sessionId;
         this.txContext = new AmqpTransactionContext(this);
+    }
+
+    /**
+     * Close the receiver, a closed receiver will throw exceptions if any further send
+     * calls are made.
+     *
+     * @throws IOException if an error occurs while closing the receiver.
+     */
+    public void close() throws IOException {
+        if (closed.compareAndSet(false, true)) {
+            final ClientFuture request = new ClientFuture();
+            getScheduler().execute(new Runnable() {
+
+                @Override
+                public void run() {
+                    checkClosed();
+                    close(request);
+                    pumpToProtonTransport(request);
+                }
+            });
+
+            request.sync();
+        }
     }
 
     /**
@@ -117,16 +143,32 @@ public class AmqpSession extends AmqpAbstractResource<Session> {
      * Create a sender instance using the given Target
      *
      * @param target
-     *        the caller created and configured Traget used to create the sender link.
+     *        the caller created and configured Target used to create the sender link.
      *
      * @return a newly created sender that is ready for use.
      *
      * @throws Exception if an error occurs while creating the receiver.
      */
     public AmqpSender createSender(Target target) throws Exception {
+        return createSender(target, getNextSenderId());
+    }
+
+    /**
+     * Create a sender instance using the given Target
+     *
+     * @param target
+     *        the caller created and configured Target used to create the sender link.
+     * @param sender
+     *        the sender ID to assign to the newly created Sender.
+     *
+     * @return a newly created sender that is ready for use.
+     *
+     * @throws Exception if an error occurs while creating the receiver.
+     */
+    public AmqpSender createSender(Target target, String senderId) throws Exception {
         checkClosed();
 
-        final AmqpSender sender = new AmqpSender(AmqpSession.this, target, getNextSenderId());
+        final AmqpSender sender = new AmqpSender(AmqpSession.this, target, senderId);
         final ClientFuture request = new ClientFuture();
 
         connection.getScheduler().execute(new Runnable() {
@@ -248,6 +290,22 @@ public class AmqpSession extends AmqpAbstractResource<Session> {
      * @throws Exception if an error occurs while creating the receiver.
      */
     public AmqpReceiver createReceiver(Source source) throws Exception {
+        return createReceiver(source, getNextReceiverId());
+    }
+
+    /**
+     * Create a receiver instance using the given Source
+     *
+     * @param source
+     *        the caller created and configured Source used to create the receiver link.
+     * @param receivedId
+     *        the ID value to assign to the newly created receiver
+     *
+     * @return a newly created receiver that is ready for use.
+     *
+     * @throws Exception if an error occurs while creating the receiver.
+     */
+    public AmqpReceiver createReceiver(Source source, String receiverId) throws Exception {
         checkClosed();
 
         final ClientFuture request = new ClientFuture();
